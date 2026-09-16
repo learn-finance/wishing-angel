@@ -259,6 +259,38 @@
     return total - baseCents;
   }
 
+  // Updates the amount/fee/total display in place, without calling render().
+  // This matters: render() replaces the whole page's HTML, which would tear
+  // out and destroy the mounted Stripe card box mid-entry. Changing the
+  // amount should never touch that box once it's mounted.
+  function updatePaymentAmountUI() {
+    const d = state.draft;
+    const feeCents = computeFeeCents(d.amountCents);
+    const totalCents = d.coverFee ? d.amountCents + feeCents : d.amountCents;
+    const fmt = (c) => `$${(c / 100).toFixed(2)}`;
+
+    document.querySelectorAll('[data-amount]').forEach(el => {
+      const val = parseInt(el.getAttribute('data-amount'), 10);
+      el.classList.toggle('selected', !d.customAmount && d.amountCents === val);
+    });
+
+    const customBox = document.getElementById('customAmountBox');
+    if (customBox) customBox.classList.toggle('selected', !!d.customAmount);
+
+    const feeToggle = document.getElementById('coverFeeToggle');
+    if (feeToggle) {
+      feeToggle.classList.toggle('checked', !!d.coverFee);
+      const span = feeToggle.querySelector('span');
+      if (span) span.textContent = `Add ${fmt(feeCents)} to cover the card processing fee, so the Angel receives the full ${fmt(d.amountCents)}.`;
+    }
+
+    const totalEl = document.querySelector('.amount-total');
+    if (totalEl) totalEl.textContent = fmt(totalCents);
+
+    const payBtn = document.getElementById('payNow');
+    if (payBtn && !state.submitting) payBtn.textContent = `Make my wish · ${fmt(totalCents)}`;
+  }
+
   function stepPaymentView() {
     const isStripe = config.paymentMode === 'stripe';
     const d = state.draft;
@@ -730,14 +762,16 @@
       el.addEventListener('click', () => {
         state.draft.amountCents = parseInt(el.getAttribute('data-amount'), 10);
         state.draft.customAmount = false;
-        render();
+        const customInputEl = document.getElementById('customAmountInput');
+        if (customInputEl) customInputEl.value = '';
+        updatePaymentAmountUI();
       });
     });
 
     const customBox = document.getElementById('customAmountBox');
     if (customBox) customBox.addEventListener('click', () => {
       state.draft.customAmount = true;
-      render();
+      updatePaymentAmountUI();
       const input = document.getElementById('customAmountInput');
       if (input) input.focus();
     });
@@ -747,12 +781,13 @@
       const min = (config.minAmountCents || 100) / 100;
       state.draft.amountCents = Number.isFinite(dollars) ? Math.round(Math.max(min, dollars) * 100) : (config.minAmountCents || 100);
       state.draft.customAmount = true;
+      updatePaymentAmountUI();
     });
 
     const coverFeeToggle = document.getElementById('coverFeeToggle');
     if (coverFeeToggle) coverFeeToggle.addEventListener('click', () => {
       state.draft.coverFee = !state.draft.coverFee;
-      render();
+      updatePaymentAmountUI();
     });
   }
 

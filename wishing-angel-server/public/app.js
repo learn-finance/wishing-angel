@@ -610,8 +610,13 @@
   async function handlePay() {
     state.submitting = true;
     state.submitError = null;
-    render();
-    if (config.paymentMode === 'stripe') await setupStripeElement();
+    // Update the button directly instead of calling render(), which would
+    // wipe and recreate the mounted Stripe card element right before we
+    // need to read what the customer typed into it.
+    const payBtn = document.getElementById('payNow');
+    if (payBtn) { payBtn.disabled = true; payBtn.textContent = 'Processing…'; }
+    const backBtn = document.querySelector('.step.active [data-nav="wish-ribbon"]');
+    if (backBtn) backBtn.disabled = true;
 
     try {
       const feeCents = computeFeeCents(state.draft.amountCents);
